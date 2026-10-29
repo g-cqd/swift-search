@@ -1,0 +1,23 @@
+name: CI
+
+# The graph (lint, linux and macOS in parallel, release archives on main and tags, one required gate) lives in the
+# shared workflow, as for the analyzers.
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: Aemi-Studio/aemi/.github/workflows/swift-tool.yml@f6da05cd0efdf60700e854efb5b6092eae89b8c5 # aemi f6da05c
+    permissions:
+      contents: write
+    with:
+      tool: swift-search
+      # A smoke run of the built tool on its own sources: one declaration it must find.
+      self-analysis: "find SymbolExtractor Sources --no-cache"
