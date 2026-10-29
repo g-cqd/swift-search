@@ -1,0 +1,8 @@
+.build/
+.swiftpm/
+.DS_Store
+*.xcodeproj
+DESIGN.md
+.claude/
+Benchmarks/.build/
+Benchmarks/.swiftpm/
