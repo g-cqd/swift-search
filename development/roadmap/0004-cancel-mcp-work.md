@@ -1,6 +1,6 @@
 ---
 status: not-started
-blocked-by: [0007]
+blocked-by: []
 date: 2026-10-29
 ---
 
@@ -15,3 +15,6 @@ Red: a test cancels a request blocked on a scripted server and sees the server r
 After 0007 the language-server half comes from `AemiJSONRPC`: a request whose task is cancelled is abandoned and the
 server is told with `$/cancelRequest` (`JSONRPCCancellation.languageServer`, tested there). What remains here is mapping
 an MCP request id to its task so `notifications/cancelled` cancels it.
+
+2026-10-30: 0007 is done; the language-server half works (a cancelled or timed-out request sends `$/cancelRequest`). The
+MCP half remains.

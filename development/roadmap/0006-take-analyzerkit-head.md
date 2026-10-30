@@ -38,7 +38,7 @@ a surrogate pair names its scalar's start; a relative `--sourcekit-lsp` is refus
 - The commands return `ExitStatus` through analyzerkit's `SearchOutcome`: 0, 1, and now 70 when no file found could
   be read (the local `SearchOutcome` enum is gone).
 
-67 tests pass. The release before and after, built side by side (`/tmp/ss-step1` at `358e657`), give byte-equal standard
+67 tests pass. Debug builds before and after, side by side (`/tmp/ss-step1` at `358e657`), give byte-equal standard
 output, standard error and exit status on ten runs: `find` in text, JSON and Xcode formats with context, no match (1),
 a missing path (64), `--relative-to`, `usages` in text and JSON, and `find`/`usages` with `--index-store` on this
 package's own build.
