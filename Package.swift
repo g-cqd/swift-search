@@ -108,7 +108,10 @@ let package = Package(
         ),
         .testTarget(
             name: "SwiftSearchLSPTests",
-            dependencies: ["SwiftSearchLSP", .product(name: "AemiJSON", package: "AemiJSON")],
+            dependencies: [
+                "SwiftSearchLSP", .product(name: "AemiJSON", package: "AemiJSON"),
+                .product(name: "IndexStoreSupport", package: "analyzerkit"),
+            ],
             swiftSettings: strictSwiftSettings
         ),
         .testTarget(
