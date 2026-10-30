@@ -156,30 +156,64 @@ private final class Collected: MessageSink {
 }
 
 @Suite struct MCPStdioTests {
+    /// Lines arrive in blocks (roadmap 0007, H8): one cut across two blocks, several in one, CRLF, a blank line.
     @Test func `answers each line, refuses an overlong one, and stops at the end of the input`() async throws {
         let project = try Project()
         defer { project.remove() }
         let overlong = String(repeating: "x", count: MCPStdio.maximumLineLength + 1)
-        let input =
-            #"{"jsonrpc":"2.0","id":1,"method":"ping"}"# + "\n\n" + overlong + "\n"
-            + #"{"jsonrpc":"2.0","id":2,"method":"ping"}"# + "\r\n"
+        let input = Array(
+            (#"{"jsonrpc":"2.0","id":1,"method":"ping"}"# + "\n\n" + overlong + "\n"
+                + #"{"jsonrpc":"2.0","id":2,"method":"ping"}"# + "\r\n" + #"{"jsonrpc":"2.0","id":3,"method":"ping"}"#
+                + "\n").utf8)
         let output = Collected()
-        await MCPStdio.serve(
-            server(project), input: Array(input.utf8).async, output: output, pool: nil)
+        await MCPStdio.serve(server(project), input: input.chunked(by: 17), output: output, pool: nil)
         let lines = output.lines.withLock { $0 }
-        #expect(lines.count == 3)
+        #expect(lines.count == 4)
         #expect(lines.allSatisfy { $0.hasSuffix("\n") })
-        #expect(lines.contains { $0.contains(#""id":1"#) })
-        #expect(lines.contains { $0.contains(#""id":2"#) })
+        for id in 1...3 { #expect(lines.contains { $0.contains(#""id":\#(id)"#) }) }
         #expect(lines.contains { $0.contains("-32700") })
+    }
+
+    /// Standard input is read a block at a time from a descriptor (AemiJSONRPC `FileDescriptorChunks`), not a byte at a
+    /// time: a megabyte of requests through a pipe is answered whole.
+    @Test func `serves a megabyte of requests from a pipe`() async throws {
+        let project = try Project()
+        defer { project.remove() }
+        var ends: [Int32] = [0, 0]
+        #expect(unsafe pipe(&ends) == 0)
+        let (readEnd, writeEnd) = (ends[0], ends[1])
+        let count = 2_000
+        let padding = String(repeating: " ", count: 500)
+        var input: [UInt8] = []
+        for id in 1...count { input += Array(#"{"jsonrpc":"2.0","id":\#(id),"method":"ping"\#(padding)}"#.utf8) + [10] }
+        #expect(input.count > 1 << 20)
+        let writer = Thread {
+            input.withUnsafeBytes { raw in
+                guard let base = raw.baseAddress else { return }
+                var offset = 0
+                while offset < raw.count {
+                    let written = unsafe write(writeEnd, base + offset, raw.count - offset)
+                    guard written > 0 else { break }
+                    offset += written
+                }
+            }
+            close(writeEnd)
+        }
+        writer.start()
+        let output = Collected()
+        await MCPStdio.serve(server(project), descriptor: readEnd, output: output, pool: nil)
+        close(readEnd)
+        #expect(output.lines.withLock { $0.count } == count)
     }
 }
 
 extension Array where Element == UInt8 {
-    /// The bytes as an asynchronous sequence that can throw, as standard input is.
-    fileprivate var async: AsyncThrowingStream<UInt8, any Error> {
+    /// The bytes in blocks of `size`, as an asynchronous sequence that can throw, as standard input is read.
+    fileprivate func chunked(by size: Int) -> AsyncThrowingStream<[UInt8], any Error> {
         AsyncThrowingStream { continuation in
-            for byte in self { continuation.yield(byte) }
+            for start in stride(from: 0, to: count, by: size) {
+                continuation.yield(Array(self[start..<Swift.min(start + size, count)]))
+            }
             continuation.finish()
         }
     }

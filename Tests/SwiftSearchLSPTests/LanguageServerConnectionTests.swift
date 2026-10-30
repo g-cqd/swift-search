@@ -1,4 +1,5 @@
 import AemiJSON
+import AemiJSONRPC
 import Synchronization
 import Testing
 
@@ -21,11 +22,11 @@ private final class ScriptedServer: MessageSink {
     }
 
     func write(_ bytes: [UInt8]) async throws {
-        var decoder = LSPFrameDecoder()
+        var decoder = ContentLengthFraming()
         for body in try decoder.append(bytes) {
             written.withLock { $0.append(body) }
             let message = try AemiJSON.parse(body).root
-            script(message, { self.continuation.yield(LSPFrame.encode($0)) }, { self.continuation.finish() })
+            script(message, { self.continuation.yield(ContentLengthFraming.frame($0)) }, { self.continuation.finish() })
         }
     }
 
@@ -104,13 +105,19 @@ private func response(id: Int, result: String) -> [UInt8] {
         }
     }
 
-    @Test func `gives up on a request at its deadline`() async throws {
+    /// The server is told when the client stops waiting (AemiJSONRPC's `.languageServer` cancellation; roadmap 0007):
+    /// sourcekit-lsp then stops the work.
+    @Test func `gives up on a request at its deadline and tells the server`() async throws {
         let server = ScriptedServer { _, _, _ in }
         let connection = LanguageServerConnection(sink: server)
         let reader = Task { await connection.run(reading: server.output) }
         await #expect(throws: LanguageServerError.timedOut(method: "slow", after: .milliseconds(50))) {
             try await connection.request("slow", [:], timeout: .milliseconds(50))
         }
+        let cancels = server.written.withLock { $0 }.compactMap { try? AemiJSON.parse($0).root }
+            .filter { $0["method"].string == "$/cancelRequest" }
+        #expect(cancels.count == 1)
+        #expect(cancels.first?["params"]["id"].int == 1)
         server.end()
         await reader.value
     }
