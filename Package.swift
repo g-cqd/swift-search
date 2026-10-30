@@ -68,6 +68,7 @@ let package = Package(
             dependencies: [
                 "SwiftSearch",
                 .product(name: "AemiJSON", package: "AemiJSON"),
+                .product(name: "AemiJSONRPC", package: "AemiJSON"),
                 .product(name: "IndexStoreSupport", package: "analyzerkit"),
                 .product(name: "SourceCorpus", package: "analyzerkit"),
                 .product(name: "Subprocess", package: "swift-subprocess"),
@@ -80,6 +81,7 @@ let package = Package(
             dependencies: [
                 "SwiftSearch", "SwiftSearchLSP",
                 .product(name: "AemiJSON", package: "AemiJSON"),
+                .product(name: "AemiJSONRPC", package: "AemiJSON"),
                 .product(name: "ProjectModel", package: "analyzerkit"),
                 .product(name: "ReportSupport", package: "analyzerkit"),
                 // Blocking reads of standard input, off the cooperative pool.
@@ -110,6 +112,7 @@ let package = Package(
             name: "SwiftSearchLSPTests",
             dependencies: [
                 "SwiftSearchLSP", .product(name: "AemiJSON", package: "AemiJSON"),
+                .product(name: "AemiJSONRPC", package: "AemiJSON"),
                 .product(name: "IndexStoreSupport", package: "analyzerkit"),
             ],
             swiftSettings: strictSwiftSettings
