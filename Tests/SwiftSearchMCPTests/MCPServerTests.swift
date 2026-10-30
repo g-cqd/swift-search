@@ -187,8 +187,9 @@ private final class Collected: MessageSink {
         var input: [UInt8] = []
         for id in 1...count { input += Array(#"{"jsonrpc":"2.0","id":\#(id),"method":"ping"\#(padding)}"#.utf8) + [10] }
         #expect(input.count > 1 << 20)
+        let payload = input
         let writer = Thread {
-            input.withUnsafeBytes { raw in
+            payload.withUnsafeBytes { raw in
                 guard let base = raw.baseAddress else { return }
                 var offset = 0
                 while offset < raw.count {
