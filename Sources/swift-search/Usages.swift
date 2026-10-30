@@ -64,7 +64,7 @@ struct Usages: AsyncParsableCommand {
                 }
             }
             if report.matches.isEmpty, !output.quiet { Diagnostics.note("no declaration matches '\(self.query)'") }
-            return usages.isEmpty ? .nothingFound : .found
+            return workspace.status(matchCount: usages.count)
         }
     }
 }

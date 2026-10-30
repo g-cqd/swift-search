@@ -109,13 +109,12 @@
                     return true
                 }
             }
-            var freshness: [String: Bool] = [:]
             var seen: Set<String> = []
             var matches: [SymbolMatch] = []
             for occurrence in found
             where occurrence.roles.contains(.definition) || occurrence.roles.contains(.declaration) {
                 let path = SourcePath.canonical(occurrence.location.path)
-                guard !occurrence.location.isSystem, isCurrent(path, &freshness) else { continue }
+                guard !occurrence.location.isSystem, isCurrent(path) else { continue }
                 let match = self.match(occurrence, path: path)
                 guard seen.insert(match.location).inserted else { continue }
                 switch pattern {
@@ -133,9 +132,8 @@
         /// - Complexity: O(*o*) in the occurrences of the files the matches are in, each file read once.
         public func enrich(_ matches: [SymbolMatch]) -> [SymbolMatch] {
             var byFile: [String: [SymbolOccurrence]] = [:]
-            var freshness: [String: Bool] = [:]
             return matches.map { match in
-                guard match.usr == nil, isCurrent(match.file, &freshness) else { return match }
+                guard match.usr == nil, isCurrent(match.file) else { return match }
                 let occurrences =
                     byFile[match.file]
                     ?? {
@@ -163,7 +161,6 @@
         /// The uses the compiler resolved to `usr`, in files whose unit is current; and the files skipped because their
         /// unit is not.
         public func uses(ofUSR usr: String, symbol: String) -> (occurrences: [Usage], staleFiles: Set<String>) {
-            var freshness: [String: Bool] = [:]
             var stale: Set<String> = []
             var uses: [Usage] = []
             let roles: SymbolRole = [.reference, .call, .read, .write]
@@ -176,7 +173,7 @@
                 let recorded = occurrence.location.path
                 let path = spellings[recorded] ?? SourcePath.canonical(recorded)
                 spellings[recorded] = path
-                guard isCurrent(path, &freshness) else {
+                guard isCurrent(path) else {
                     stale.insert(path)
                     continue
                 }
@@ -188,25 +185,13 @@
             return (Array(Set(uses)).sorted(), stale)
         }
 
-        /// Whether `file`'s latest unit is at least as new as the file.
+        /// Whether `file`'s latest unit is at least as new as the file: answered from the coverage made when the store
+        /// opened, or looked up once and remembered for the session (analyzerkit `IndexFreshness`).
         public func isCurrent(_ file: String) -> Bool {
-            var freshness: [String: Bool] = [:]
-            return isCurrent(file, &freshness)
+            session.freshness.isCurrent(file)
         }
 
         // MARK: Conversion
-
-        private func isCurrent(_ file: String, _ memo: inout [String: Bool]) -> Bool {
-            if let known = memo[file] { return known }
-            let coverage = IndexCoverage.classify(
-                [file], unitDate: { session.database.dateOfLatestUnitFor(filePath: $0) },
-                modificationDate: {
-                    (try? FileManager.default.attributesOfItem(atPath: $0))?[.modificationDate] as? Date
-                })
-            let current = coverage.files.first?.coverage == .indexed
-            memo[file] = current
-            return current
-        }
 
         private func match(_ occurrence: SymbolOccurrence, path: String) -> SymbolMatch {
             let symbol = occurrence.symbol

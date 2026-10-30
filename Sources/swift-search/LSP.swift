@@ -121,7 +121,7 @@ struct LSP: AsyncParsableCommand {
             let empty =
                 (report.locations?.isEmpty ?? true) && (report.calls?.isEmpty ?? true)
                 && (report.symbols?.isEmpty ?? true) && report.hover == nil
-            return empty ? .nothingFound : .found
+            return SearchOutcome.status(matchCount: empty ? 0 : 1)
         }
     }
 
