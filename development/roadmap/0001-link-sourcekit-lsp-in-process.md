@@ -1,6 +1,6 @@
 ---
 status: not-started
-blocked-by: [analyzerkit indexstore-db requirement]
+blocked-by: [analyzerkit ADR-0025]
 date: 2026-10-29
 ---
 
@@ -9,10 +9,12 @@ date: 2026-10-29
 Scope: an `InProcessLanguageServer` beside the process client (ADR-0001), behind a package trait so the default build
 does not pay for SwiftPM and swift-docc, with the same `LanguageServerSession` surface.
 
-Blocked by: analyzerkit requires indexstore-db by revision; sourcekit-lsp requires it by branch (`release/6.4.x` for
-`swift-6.4.1-RELEASE`). Unblocking is a family decision (analyzerkit ADR-0004 asks arcleak and deadwood to pin the same
-revision): analyzerkit, arcleak and deadwood move to `branch: "release/6.4.x"`, or to whatever requirement the
-sourcekit-lsp tag in use names.
+Blocked by analyzerkit ADR-0025 (2026-10-30): SwiftPM refuses two requirements on indexstore-db written differently, even
+a revision and a branch naming the same commit, and sourcekit-lsp's tags require `branch: "release/6.4.x"`. The family
+keeps one revision of upstream `main`, because its concurrent record reads halve the reference scans deadwood and arcleak
+make (1.14 s against 2.24 s on the reference app's store); the release branch lacks them. This entry can move only if a
+sourcekit-lsp tag requires the family's revision, or the family's measurement changes; until then sourcekit-lsp runs
+out of process (ADR-0001).
 
 Red: the resolution probe of ADR-0001 resolves; a test runs `definition` through both clients on the demo package of
 `SourceKitLSPTests` and compares the answers.
