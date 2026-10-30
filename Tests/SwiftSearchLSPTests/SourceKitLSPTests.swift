@@ -1,4 +1,5 @@
 import Foundation
+import IndexStoreSupport
 import Testing
 
 @testable import SwiftSearchLSP
@@ -82,5 +83,20 @@ struct SourceKitLSPTests {
         try "#!/bin/sh\n".write(toFile: fake, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o777], ofItemAtPath: fake)
         await #expect(throws: LanguageServerError.self) { try await SourceKitLSP.locate(explicit: fake) }
+    }
+
+    /// An explicit server is checked as analyzerkit checks it (roadmap 0006, analyzerkit 0052): absolute, executable,
+    /// trusted, and the reason says which.
+    @Test func `refuses a relative server path and says why`() async throws {
+        await #expect(throws: LanguageServerError.serverNotFound("sourcekit-lsp: an explicit path must be absolute")) {
+            try await SourceKitLSP.locate(explicit: "bin/sourcekit-lsp")
+        }
+    }
+
+    /// Without one, the server is the toolchain's that analyzerkit resolves, beside its libIndexStore.
+    @Test func `finds the server beside the toolchain's libIndexStore`() async throws {
+        let resolved = await ToolchainResolution.resolve()
+        guard let expected = resolved.sourceKitLSPPath else { return }
+        #expect(try await SourceKitLSP.locate() == expected)
     }
 }
