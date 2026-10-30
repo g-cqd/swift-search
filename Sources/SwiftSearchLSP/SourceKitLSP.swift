@@ -23,46 +23,26 @@ public enum SourceKitLSP {
     /// How long the server has to exit after `shutdown` and `exit` before its process group is terminated.
     public static let exitGrace: Duration = .seconds(5)
 
-    /// The trusted sourcekit-lsp to run: `explicit` when given, else the selected toolchain's.
-    /// - Throws: ``LanguageServerError/serverNotFound(_:)``.
+    /// The trusted sourcekit-lsp to run: `explicit` when given (absolute, executable, trusted), else the one beside the
+    /// `libIndexStore` analyzerkit's `ToolchainResolution` selects, so the server and the index reader come from one
+    /// toolchain.
+    /// - Throws: ``LanguageServerError/serverNotFound(_:)`` with the reason.
     public static func locate(explicit: String? = nil) async throws(LanguageServerError) -> String {
-        var candidates: [String] = []
         if let explicit {
-            candidates = [explicit]
-        } else {
-            let environment = ProcessInfo.processInfo.environment
-            if let developer = environment["DEVELOPER_DIR"], developer.hasPrefix("/") {
-                let root = developer.hasSuffix(".app") ? developer + "/Contents/Developer" : developer
-                candidates += [
-                    root + "/Toolchains/XcodeDefault.xctoolchain/usr/bin/sourcekit-lsp",
-                    root + "/usr/bin/sourcekit-lsp",
-                ]
-            }
-            var probe = ["PATH": "/usr/bin:/bin:/usr/sbin:/sbin"]
-            probe["HOME"] = environment["HOME"]
-            probe["DEVELOPER_DIR"] = environment["DEVELOPER_DIR"]
-            if let result = try? await BoundedProcess.run(
-                "/usr/bin/xcrun", ["--find", "sourcekit-lsp"], environment: probe, timeout: .seconds(10),
-                outputLimit: 4096), result.succeeded
-            {
-                let path = result.standardOutputText.trimmingCharacters(in: .whitespacesAndNewlines)
-                if path.hasPrefix("/") { candidates.append(path) }
+            switch ToolchainResolution.explicitSourceKitLSP(explicit) {
+            case .success(let path): return path
+            case .failure(let rejection): throw .serverNotFound(rejection.description)
             }
         }
-        var rejections: [String] = []
-        for candidate in candidates {
-            guard FileManager.default.isExecutableFile(atPath: candidate) else {
-                rejections.append("\(candidate) is not an executable")
-                continue
-            }
-            let trust = BinaryTrustChecker.assess(candidate)
-            if trust.isTrusted { return trust.path }
-            rejections.append("\(trust.path): \(trust.rejection ?? "not trusted")")
+        let resolved = await ToolchainResolution.resolve()
+        if let server = resolved.sourceKitLSPPath { return server }
+        let reasons = resolved.diagnostics.filter {
+            $0.hasPrefix("sourcekit-lsp:") || $0.hasSuffix("no trusted library found")
         }
         throw .serverNotFound(
-            rejections.isEmpty
+            reasons.isEmpty
                 ? "no toolchain selected (xcode-select, DEVELOPER_DIR) has one; pass --sourcekit-lsp"
-                : rejections.joined(separator: "; "))
+                : reasons.joined(separator: "; ") + "; pass --sourcekit-lsp")
     }
 
     /// Starts sourcekit-lsp on `workspace`, initializes it, runs `body` with the session, then shuts the server down.

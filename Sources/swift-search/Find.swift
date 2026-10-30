@@ -55,7 +55,7 @@ struct Find: AsyncParsableCommand {
             case .text:
                 for record in records { try writer.write(writer.text(record) + "\n") }
             }
-            return matches.isEmpty ? .nothingFound : .found
+            return workspace.status(matchCount: matches.count)
         }
     }
 }

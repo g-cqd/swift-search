@@ -208,7 +208,7 @@ public final class LanguageServerSession: Sendable {
             throw LanguageServerError.unreadableFile(file)
         }
         let text = String(decoding: bytes, as: UTF8.self)
-        let positions = TextPositions(text)
+        let positions = TextPositions(bytes: bytes)
         let first = documents.withLock { documents in
             documents.positions[file] = positions
             return documents.opened.insert(file).inserted
@@ -237,7 +237,7 @@ public final class LanguageServerSession: Sendable {
                 guard let bytes = try? BoundedFileReader.read(path: file, cap: BoundedFileReader.sourceByteCap) else {
                     return nil
                 }
-                let positions = TextPositions(String(decoding: bytes, as: UTF8.self))
+                let positions = TextPositions(bytes: bytes)
                 documents.withLock { $0.positions[file] = positions }
                 return positions
             }()

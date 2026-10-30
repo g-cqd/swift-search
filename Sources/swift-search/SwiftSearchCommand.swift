@@ -98,18 +98,12 @@ extension SearchWorkspace.Options {
     }
 }
 
-/// How a search run ends: found something, or found nothing (grep's 1).
-enum SearchOutcome {
-    case found
-    case nothingFound
-}
-
-/// Runs `body`, mapping its outcome and the search's errors to exit statuses: 0 found, 1 nothing found, and the
-/// family's 64, 70 and 74 (analyzerkit ADR-0018).
-func runReportingErrors(_ body: () async throws -> SearchOutcome) async throws {
+/// Runs `body`, mapping the status it returns and the search's errors to exit statuses: 0 found, 1 nothing found, 70
+/// nothing readable (analyzerkit `SearchOutcome`, ADR-0026), and the family's 64, 70 and 74 (ADR-0018).
+func runReportingErrors(_ body: () async throws -> ExitStatus) async throws {
     let status: Int32
     do {
-        status = try await body() == .found ? ExitStatus.success.rawValue : 1
+        status = try await body().rawValue
     } catch let error as SearchError {
         Diagnostics.error(error.description)
         status = ExitStatus.usage.rawValue
@@ -133,5 +127,14 @@ enum Diagnostics {
 
     static func note(_ message: String) {
         FileHandle.standardError.write(Data("swift-search: note: \(message)\n".utf8))
+    }
+}
+
+extension SearchWorkspace {
+    /// The status of a search over this workspace that printed `matchCount` matches.
+    func status(matchCount: Int) -> ExitStatus {
+        let skipped = corpus.skippedFiles.count
+        return SearchOutcome.status(
+            matchCount: matchCount, analyzedFileCount: corpus.files.count - skipped, skippedFileCount: skipped)
     }
 }
