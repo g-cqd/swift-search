@@ -69,6 +69,28 @@ struct SourceKitLSPTests {
         #expect(answers.hover?.contains("func greet(name: String) -> String") == true)
     }
 
+    @Test func `tells a symbol its index has no record of from one nothing uses`() async throws {
+        let package = try DemoPackage()
+        defer { package.remove() }
+        // A file outside every target, as sourcekit-lsp sees a package its background index could not build.
+        let loose = package.root + "/Scripts/Loose.swift"
+        try FileManager.default.createDirectory(atPath: package.root + "/Scripts", withIntermediateDirectories: true)
+        try "func unreached() {}\n".write(toFile: loose, atomically: true, encoding: .utf8)
+        let file = package.file
+        let answers = try await SourceKitLSP.withSession(workspace: package.root) { session in
+            let main = SourcePosition(file: file, line: 11, column: 6)  // nothing calls main()
+            let unreached = SourcePosition(file: loose, line: 1, column: 6)
+            return (
+                mainCallers: try await session.callers(of: main),
+                mainIsIndexed: try await session.indexHasRecord(at: main),
+                unreachedIsIndexed: try await session.indexHasRecord(at: unreached)
+            )
+        }
+        #expect(answers.mainCallers.isEmpty)
+        #expect(answers.mainIsIndexed)
+        #expect(!answers.unreachedIsIndexed)
+    }
+
     @Test func `refuses a workspace that is not a directory`() async throws {
         await #expect(throws: LanguageServerError.invalidWorkspace("/nonexistent/workspace")) {
             try await SourceKitLSP.withSession(workspace: "/nonexistent/workspace") { _ in () }
