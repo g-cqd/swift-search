@@ -24,6 +24,7 @@ extension MCPServer {
         let locations: [String]?
         let calls: [CallRecord]?
         let hover: String?
+        var notes: [String]? = nil
     }
 
     private struct CallRecord: Encodable {
@@ -119,7 +120,7 @@ extension MCPServer {
             ?? ProjectLayout.discover(paths: [position.file])?.root ?? root
         let session = try await languageServer(for: workspace)
         let format = { (found: SourcePosition) in "\(self.present(found.file)):\(found.line):\(found.column)" }
-        let output: PositionOutput
+        var output: PositionOutput
         switch tool {
         case ToolCatalog.definition:
             output = .init(
@@ -147,6 +148,12 @@ extension MCPServer {
                         symbol: $0.symbol.name, kind: $0.symbol.kind, location: format($0.symbol.position),
                         callSites: $0.callSites.map(format))
                 }, hover: nil)
+        }
+        let readsIndex = tool != ToolCatalog.definition && tool != ToolCatalog.hover
+        if readsIndex, output.locations?.isEmpty ?? true, output.calls?.isEmpty ?? true,
+            try await !session.indexHasRecord(at: position)
+        {
+            output.notes = [LanguageServerSession.unindexedNote(position)]
         }
         return try Self.json(output)
     }

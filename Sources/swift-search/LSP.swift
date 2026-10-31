@@ -50,6 +50,11 @@ struct LSP: AsyncParsableCommand {
         let calls: [Call]?
         let symbols: [Symbol]?
         let hover: String?
+        var notes: [String]? = nil
+
+        var isEmpty: Bool {
+            (locations?.isEmpty ?? true) && (calls?.isEmpty ?? true) && (symbols?.isEmpty ?? true) && hover == nil
+        }
     }
 
     private struct Call: Encodable {
@@ -78,50 +83,60 @@ struct LSP: AsyncParsableCommand {
                 ?? ProjectLayout.discover(paths: [position?.file ?? SourcePath.absolute(".")])?.root
                 ?? SourcePath.absolute(".")
             let report = try await SourceKitLSP.withSession(workspace: root, executable: sourceKitLSP) { session in
-                func at() throws -> SourcePosition {
-                    guard let position else { throw ValidationError("\(operation.rawValue) needs a position") }
-                    return position
-                }
-                switch operation {
-                case .symbols:
-                    let symbols = try await session.workspaceSymbols(target)
-                    return Report(
-                        operation: operation.rawValue, target: target, locations: nil, calls: nil,
-                        symbols: symbols.map {
-                            Symbol(name: $0.name, kind: $0.kind, container: $0.container, location: format($0.position))
-                        }, hover: nil)
-                case .hover:
-                    return Report(
-                        operation: operation.rawValue, target: target, locations: nil, calls: nil, symbols: nil,
-                        hover: try await session.hover(at: try at()))
-                case .callers, .callees:
-                    let calls =
-                        operation == .callers
-                        ? try await session.callers(of: try at()) : try await session.callees(of: try at())
-                    return Report(
-                        operation: operation.rawValue, target: target, locations: nil,
-                        calls: calls.map {
-                            Call(
-                                symbol: $0.symbol.name, kind: $0.symbol.kind, location: format($0.symbol.position),
-                                callSites: $0.callSites.map(format))
-                        }, symbols: nil, hover: nil)
-                case .definition, .references, .implementations:
-                    let found =
-                        switch operation {
-                        case .definition: try await session.definition(at: try at())
-                        case .references: try await session.references(at: try at())
-                        default: try await session.implementations(at: try at())
-                        }
-                    return Report(
-                        operation: operation.rawValue, target: target, locations: found.map(format), calls: nil,
-                        symbols: nil, hover: nil)
-                }
+                let report = try await answer(session, at: position, format: format)
+                guard report.isEmpty, let position, operation.readsIndex,
+                    try await !session.indexHasRecord(at: position)
+                else { return report }
+                var noted = report
+                noted.notes = [LanguageServerSession.unindexedNote(position)]
+                return noted
             }
+            if !output.quiet { for note in report.notes ?? [] { Diagnostics.note(note) } }
             try write(report, with: writer)
-            let empty =
-                (report.locations?.isEmpty ?? true) && (report.calls?.isEmpty ?? true)
-                && (report.symbols?.isEmpty ?? true) && report.hover == nil
-            return SearchOutcome.status(matchCount: empty ? 0 : 1)
+            return SearchOutcome.status(matchCount: report.isEmpty ? 0 : 1)
+        }
+    }
+
+    private func answer(
+        _ session: LanguageServerSession, at position: SourcePosition?, format: (SourcePosition) -> String
+    ) async throws -> Report {
+        func at() throws -> SourcePosition {
+            guard let position else { throw ValidationError("\(operation.rawValue) needs a position") }
+            return position
+        }
+        switch operation {
+        case .symbols:
+            let symbols = try await session.workspaceSymbols(target)
+            return Report(
+                operation: operation.rawValue, target: target, locations: nil, calls: nil,
+                symbols: symbols.map {
+                    Symbol(name: $0.name, kind: $0.kind, container: $0.container, location: format($0.position))
+                }, hover: nil)
+        case .hover:
+            return Report(
+                operation: operation.rawValue, target: target, locations: nil, calls: nil, symbols: nil,
+                hover: try await session.hover(at: try at()))
+        case .callers, .callees:
+            let calls =
+                operation == .callers
+                ? try await session.callers(of: try at()) : try await session.callees(of: try at())
+            return Report(
+                operation: operation.rawValue, target: target, locations: nil,
+                calls: calls.map {
+                    Call(
+                        symbol: $0.symbol.name, kind: $0.symbol.kind, location: format($0.symbol.position),
+                        callSites: $0.callSites.map(format))
+                }, symbols: nil, hover: nil)
+        case .definition, .references, .implementations:
+            let found =
+                switch operation {
+                case .definition: try await session.definition(at: try at())
+                case .references: try await session.references(at: try at())
+                default: try await session.implementations(at: try at())
+                }
+            return Report(
+                operation: operation.rawValue, target: target, locations: found.map(format), calls: nil,
+                symbols: nil, hover: nil)
         }
     }
 
@@ -165,5 +180,15 @@ struct LSP: AsyncParsableCommand {
                     + "file:line:column:\n" + candidates.joined(separator: "\n"))
         }
         return SourcePosition(file: match.file, line: match.line, column: match.column)
+    }
+}
+
+extension LSP.Operation {
+    /// Whether sourcekit-lsp answers the operation from its index.
+    fileprivate var readsIndex: Bool {
+        switch self {
+        case .references, .implementations, .callers, .callees: true
+        case .definition, .hover, .symbols: false
+        }
     }
 }

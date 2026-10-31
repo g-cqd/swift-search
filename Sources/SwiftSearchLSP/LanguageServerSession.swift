@@ -113,6 +113,21 @@ public final class LanguageServerSession: Sendable {
             extra: ["context": ["includeDeclaration": .bool(includeDeclaration)]])
     }
 
+    /// Whether sourcekit-lsp's index holds the symbol at `position`: an indexed symbol has at least its declaration
+    /// among its references. An empty answer from the index (references, implementations, callers, callees) about a
+    /// symbol it holds no record of says nothing about the symbol's uses.
+    public func indexHasRecord(at position: SourcePosition) async throws -> Bool {
+        !(try await references(at: position, includeDeclaration: true)).isEmpty
+    }
+
+    /// The note for an empty answer about a symbol the index holds no record of.
+    public static func unindexedNote(_ position: SourcePosition) -> String {
+        "sourcekit-lsp's index holds no record of the symbol at \(position.file):\(position.line):\(position.column), "
+            + "so the empty answer says nothing about its uses: its background index builds the package for this "
+            + "machine, and leaves out a file outside every target or a package that does not build here (one for "
+            + "iOS only, for example). The syntax (usages) or a build's index store (usages --index-store) still answer."
+    }
+
     /// `textDocument/hover`: the declaration and documentation of the symbol at `position`, as text.
     public func hover(at position: SourcePosition) async throws -> String? {
         let result = try await connection.request("textDocument/hover", try await documentPosition(position))
