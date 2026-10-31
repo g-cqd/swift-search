@@ -47,7 +47,8 @@ file, a malformed query), 70 for an internal failure, 74 when the output could n
 - **Syntax.** Declarations at file and type scope; locals are not indexed. A use is a use of the *name*: a call whose
   argument labels the declaration cannot take, or a use through `Type.` where `Type` is another type of the corpus, is
   left out, and so is a call of a property whose declared type is not a function; everything else is reported and marked
-  `(by name)`. `Type(...)` is a use of the type, not of its `init`. Facts are cached per file (analyzerkit `CorpusScan`),
+  `(by name)`. An enum case's associated values are its labels: `.moved(by: 1)` is not a use of `case moved(to:)`, but
+  a pattern without labels (`case .moved(let value)`) is kept for every case of the name. `Type(...)` is a use of the type, not of its `init`. Facts are cached per file (analyzerkit `CorpusScan`),
   so a second run parses only the files that changed.
 - **Index store.** Opened through analyzerkit `IndexStoreSupport`: the store found for the project (SwiftPM's
   `.build`, then Xcode's DerivedData) or `--index-store-path`, its database under the cache directory, never beside the
@@ -56,7 +57,10 @@ file, a malformed query), 70 for an internal failure, 74 when the output could n
 - **sourcekit-lsp.** The selected toolchain's server (`DEVELOPER_DIR`, else `xcrun --find sourcekit-lsp`), checked by
   analyzerkit's `BinaryTrustChecker` before it runs, in a process group of its own that is stopped with the command.
   Queries answered from sourcekit-lsp's index wait for its background index first (`workspace/synchronize`), which the
-  first run in a package builds. An Xcode project needs a build server (for example `xcode-build-server`).
+  first run in a package builds. An Xcode project needs a build server (for example `xcode-build-server`). The
+  background index builds for this machine, so a package that does not build here (one for iOS only) or a file outside
+  every target has no record in it: an empty answer about such a symbol comes with a note that says so (`notes` in
+  JSON and MCP), and `usages`, with or without `--index-store-path`, still answers.
 
 ## MCP server
 
