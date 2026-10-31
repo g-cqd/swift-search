@@ -18,9 +18,13 @@
     /// since the build may have moved every line, so its index facts are not reported.
     public struct IndexStoreResolver: Sendable {
         public let session: IndexStoreSession
+        /// analyzerkit's queries over the session's database (roadmap 0054): canonical paths, base-name lookup,
+        /// containers.
+        private let queries: IndexQueries
 
         public init(session: IndexStoreSession) {
             self.session = session
+            queries = IndexQueries(session: session)
         }
 
         /// What opening a store for a corpus gave: a resolver, or the notes that say why there is none.
@@ -85,37 +89,23 @@
         /// - Complexity: O(*k*) in the canonical occurrences whose name starts with the pattern's name; every canonical
         ///   occurrence for a regex.
         public func definitions(_ pattern: SymbolQuery.Pattern) throws(QueryParseError) -> [SymbolMatch] {
-            let database = session.database
-            var found: [SymbolOccurrence] = []
+            let found: [IndexQueries.Occurrence]
             switch pattern {
             case .usr(let usr):
-                found = database.occurrences(ofUSR: usr, roles: [.definition, .declaration])
+                found = queries.occurrences(ofUSR: usr, roles: [.definition, .declaration])
             case .name(let name), .qualified(_, let name):
-                database.forEachCanonicalSymbolOccurrence(
-                    containing: name, anchorStart: true, anchorEnd: false, subsequence: false, ignoreCase: false
-                ) { occurrence in
-                    if Self.baseName(occurrence.symbol.name) == name { found.append(occurrence) }
-                    return true
-                }
+                found = queries.occurrences(baseNamed: name)
             case .selector(_, let name, let labels):
-                let spelled = name + "(" + labels.map { ($0 ?? "_") + ":" }.joined() + ")"
-                found = database.canonicalOccurrences(ofName: spelled)
+                found = queries.occurrences(named: name + "(" + labels.map { ($0 ?? "_") + ":" }.joined() + ")")
             case .regex(let expression):
                 let compiled = try NameExpression(expression)
-                database.forEachCanonicalSymbolOccurrence(
-                    containing: "", anchorStart: false, anchorEnd: false, subsequence: false, ignoreCase: false
-                ) { occurrence in
-                    if compiled.matches(Self.baseName(occurrence.symbol.name)) { found.append(occurrence) }
-                    return true
-                }
+                found = queries.occurrences(whereName: { compiled.matches(Self.baseName($0)) })
             }
             var seen: Set<String> = []
             var matches: [SymbolMatch] = []
-            for occurrence in found
-            where occurrence.roles.contains(.definition) || occurrence.roles.contains(.declaration) {
-                let path = SourcePath.canonical(occurrence.location.path)
-                guard !occurrence.location.isSystem, isCurrent(path) else { continue }
-                let match = self.match(occurrence, path: path)
+            for occurrence in found where occurrence.isDefinitionLike {
+                guard !occurrence.isSystem, isCurrent(occurrence.file) else { continue }
+                let match = self.match(occurrence)
                 guard seen.insert(match.location).inserted else { continue }
                 switch pattern {
                 case .qualified(let types, _), .selector(let types, _, _):
@@ -131,28 +121,26 @@
         /// `matches` with the USR and module the store records for each one's definition, when the file is current.
         /// - Complexity: O(*o*) in the occurrences of the files the matches are in, each file read once.
         public func enrich(_ matches: [SymbolMatch]) -> [SymbolMatch] {
-            var byFile: [String: [SymbolOccurrence]] = [:]
+            var byFile: [String: [IndexQueries.Occurrence]] = [:]
             return matches.map { match in
                 guard match.usr == nil, isCurrent(match.file) else { return match }
                 let occurrences =
                     byFile[match.file]
                     ?? {
-                        let read = session.database.symbolOccurrences(inFilePath: match.file).filter {
-                            $0.roles.contains(.definition) || $0.roles.contains(.declaration)
-                        }
+                        // The store's order, not `definitions(inFile:)`'s sorted one: the first match below keeps it.
+                        let read = queries.occurrences(inFile: match.file).filter(\.isDefinitionLike)
                         byFile[match.file] = read
                         return read
                     }()
                 let definition =
                     occurrences.first {
-                        $0.location.line == match.line && $0.location.utf8Column == match.column
-                            && Self.baseName($0.symbol.name) == match.name
+                        $0.line == match.line && $0.column == match.column && $0.baseName == match.name
                     }
                     ?? occurrences.first {
-                        $0.location.line == match.line && Self.baseName($0.symbol.name) == match.name
+                        $0.line == match.line && $0.baseName == match.name
                     }
                 guard let definition else { return match }
-                return match.with(usr: definition.symbol.usr, module: definition.location.moduleName)
+                return match.with(usr: definition.usr, module: definition.module)
             }
         }
 
@@ -164,22 +152,17 @@
             var stale: Set<String> = []
             var uses: [Usage] = []
             let roles: SymbolRole = [.reference, .call, .read, .write]
-            var spellings: [String: String] = [:]
-            for occurrence in session.database.occurrences(ofUSR: usr, roles: roles)
-            where !occurrence.roles.contains(.definition) && !occurrence.roles.contains(.declaration)
-                && !occurrence.roles.contains(.implicit)
-            {
-                // The store records the paths the compiler was given; the corpus spells each file canonically.
-                let recorded = occurrence.location.path
-                let path = spellings[recorded] ?? SourcePath.canonical(recorded)
-                spellings[recorded] = path
+            // The store records the paths the compiler was given; `IndexQueries` gives them as the corpus spells them.
+            for occurrence in queries.occurrences(ofUSR: usr, roles: roles)
+            where !occurrence.isDefinitionLike && !occurrence.roles.contains(.implicit) {
+                let path = occurrence.file
                 guard isCurrent(path) else {
                     stale.insert(path)
                     continue
                 }
                 uses.append(
                     Usage(
-                        file: path, line: occurrence.location.line, column: occurrence.location.utf8Column,
+                        file: path, line: occurrence.line, column: occurrence.column,
                         role: Self.role(occurrence.roles), symbol: symbol, isResolved: true))
             }
             return (Array(Set(uses)).sorted(), stale)
@@ -193,39 +176,18 @@
 
         // MARK: Conversion
 
-        private func match(_ occurrence: SymbolOccurrence, path: String) -> SymbolMatch {
-            let symbol = occurrence.symbol
-            return SymbolMatch(
-                name: Self.baseName(symbol.name), kind: Self.kind(symbol.kind),
-                accessLevel: Self.access(symbol.properties),
-                isStatic: [.staticMethod, .staticProperty, .classMethod, .classProperty].contains(symbol.kind),
-                file: path, line: occurrence.location.line,
-                column: occurrence.location.utf8Column, containers: containers(of: occurrence), usr: symbol.usr,
-                module: occurrence.location.moduleName, source: .indexStore)
-        }
-
-        /// The enclosing types, outermost first, from `childOf` relations; at most 32 levels.
-        private func containers(of occurrence: SymbolOccurrence) -> [String] {
-            var names: [String] = []
-            var current = occurrence
-            for _ in 0..<32 {
-                guard let parent = current.relations.first(where: { $0.roles.contains(.childOf) })?.symbol,
-                    parent.kind != .module
-                else { break }
-                names.append(Self.baseName(parent.name))
-                guard
-                    let definition = session.database.occurrences(ofUSR: parent.usr, roles: [.definition]).first
-                else { break }
-                current = definition
-            }
-            return names.reversed()
+        private func match(_ occurrence: IndexQueries.Occurrence) -> SymbolMatch {
+            SymbolMatch(
+                name: occurrence.baseName, kind: Self.kind(occurrence.kind),
+                accessLevel: Self.access(occurrence.record.symbol.properties),
+                isStatic: [.staticMethod, .staticProperty, .classMethod, .classProperty].contains(occurrence.kind),
+                file: occurrence.file, line: occurrence.line, column: occurrence.column,
+                containers: queries.containers(of: occurrence), usr: occurrence.usr, module: occurrence.module,
+                source: .indexStore)
         }
 
         /// `fetch` for `fetch(id:)`.
-        static func baseName(_ name: String) -> String {
-            guard let open = name.firstIndex(of: "("), open != name.startIndex else { return name }
-            return String(name[..<open])
-        }
+        static func baseName(_ name: String) -> String { IndexQueries.baseName(name) }
 
         private static func kind(_ kind: IndexSymbolKind) -> DeclarationKind {
             switch kind {
