@@ -31,14 +31,19 @@ public struct Reference: Sendable, Hashable, Codable {
     /// Whether a call with these arguments can call a function with `signature`: each label, in order, is the label
     /// of a parameter, a parameter left out has a default (which the syntax of a use cannot see, so any may be left
     /// out), and a variadic parameter takes a run of unlabeled arguments after its own.
+    ///
+    /// With `unlabeledFitsAny`, an argument without a label fits any parameter: a pattern of an enum case may leave out
+    /// the labels of its associated values (`case .moved(let to)`), or bind them all at once (`case .moved(let all)`).
     /// - Complexity: O(*a* + *p*) in the arguments and parameters.
-    public func canCall(_ signature: FunctionSignature) -> Bool {
+    public func canCall(_ signature: FunctionSignature, unlabeledFitsAny: Bool = false) -> Bool {
         guard let arguments else { return true }
         var parameter = 0
         var index = 0
         while index < arguments.count {
             let label = arguments[index]
-            while parameter < signature.parameters.count, signature.parameters[parameter].label != label {
+            while parameter < signature.parameters.count, !(label == nil && unlabeledFitsAny),
+                signature.parameters[parameter].label != label
+            {
                 parameter += 1
             }
             guard parameter < signature.parameters.count else { return false }

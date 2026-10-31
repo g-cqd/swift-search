@@ -40,7 +40,11 @@ public enum SyntaxResolver {
             // The declaration's own name token is not a use.
             if use.file == match.file, reference.line == match.line, reference.column == match.column { return nil }
             // A call whose labels the declaration cannot take calls another overload or another function.
-            if let signature = match.signature, !reference.canCall(signature) { return nil }
+            if let signature = match.signature,
+                !reference.canCall(signature, unlabeledFitsAny: match.kind == .enumCase)
+            {
+                return nil
+            }
             // A property declared with a type that is not a function cannot be called.
             if reference.role == .call, match.kind == .variable || match.kind == .constant,
                 let type = match.typeAnnotation, !type.contains("->")

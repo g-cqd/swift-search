@@ -167,7 +167,9 @@ final class SymbolVisitor: SyntaxVisitor {
         guard bodyDepth == 0, let declaration = node.parent?.parent?.as(EnumCaseDeclSyntax.self) else {
             return .visitChildren
         }
-        record(node.name.text, .enumCase, node: node, name: node.name, modifiers: declaration.modifiers)
+        record(
+            node.name.text, .enumCase, node: node, name: node.name, modifiers: declaration.modifiers,
+            signature: node.parameterClause.map(signature))
         return .visitChildren
     }
 
@@ -331,6 +333,17 @@ final class SymbolVisitor: SyntaxVisitor {
             },
             returnType: returns?.type.trimmedDescription, isAsync: effects?.asyncSpecifier != nil,
             isThrowing: effects?.throwsClause != nil)
+    }
+
+    /// The associated values of an enum case as parameters: `case moved(to: Int, _ by: Int)` takes `(to:_:)`.
+    private func signature(_ clause: EnumCaseParameterClauseSyntax) -> FunctionSignature {
+        FunctionSignature(
+            parameters: clause.parameters.map { parameter in
+                let label = parameter.firstName.map(\.text).flatMap { $0 == "_" ? nil : $0 }
+                return FunctionSignature.Parameter(
+                    label: label, name: parameter.secondName?.text ?? label ?? "_",
+                    type: parameter.type.trimmedDescription)
+            })
     }
 
     // MARK: Syntax helpers
