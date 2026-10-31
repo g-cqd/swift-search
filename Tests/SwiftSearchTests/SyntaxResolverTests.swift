@@ -97,6 +97,31 @@ import Testing
         #expect(SyntaxResolver.uses(of: find, in: corpus).map(\.line) == [3])
     }
 
+    @Test func `leaves out uses of an enum case whose labels another case of the name takes`() throws {
+        let corpus = table(
+            """
+            enum RecorderError: Error { case invalid(from: Int, action: String) }
+            enum EngineError: Error { case invalid(from: Int, calling: String) }
+            func use(error: RecorderError) throws {
+                throw .invalid(from: 1, action: "start")
+                throw EngineError.invalid(from: 1, calling: "start")
+                switch error {
+                case .invalid(let from, let action): _ = (from, action)
+                case .invalid(from: let from, action: _): _ = from
+                case .invalid(let payload): _ = payload
+                }
+                if case .invalid(from: _, calling: _) = error {}
+            }
+            """)
+        let invalid = try #require(
+            SyntaxResolver.resolve(.qualified(types: ["RecorderError"], name: "invalid"), in: corpus).first)
+        #expect(invalid.signature?.selector == "(from:action:)")
+        #expect(SyntaxResolver.uses(of: invalid, in: corpus).map(\.line) == [4, 7, 8, 9])
+        #expect(
+            try SyntaxResolver.resolve(QueryParser.parse("invalid(from:calling:)"), in: corpus).map(\.qualifiedSelector)
+                == ["EngineError.invalid(from:calling:)"])
+    }
+
     @Test func `leaves out calls of a name that a property with a non-function type cannot answer`() throws {
         let corpus = table(
             """
