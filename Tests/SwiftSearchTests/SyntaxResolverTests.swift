@@ -122,6 +122,40 @@ import Testing
                 == ["EngineError.invalid(from:calling:)"])
     }
 
+    @Test func `leaves out a pattern without labels whose subject's written type is another enum`() throws {
+        let corpus = table(
+            """
+            enum RecorderError: Error { case invalid(from: Int, action: String) }
+            extension Engine {
+                enum Failure: Error {
+                    case invalid(from: Int, calling: String)
+                    var text: String {
+                        switch self {
+                        case .invalid(let from, let calling): "\\(from) \\(calling)"
+                        }
+                    }
+                }
+            }
+            func use(error: RecorderError, failure: Engine.Failure?, unknown: Any) {
+                switch error { case .invalid(let from, let action): _ = (from, action) }
+                if case .invalid(let payload) = failure { _ = payload }
+                guard case .invalid(let payload) = unknown else { return }
+                switch failure {
+                case .some(.invalid(let from, _)): _ = from
+                default: break
+                }
+            }
+            """)
+        let invalid = try #require(
+            SyntaxResolver.resolve(.qualified(types: ["RecorderError"], name: "invalid"), in: corpus).first)
+        // Kept: the subject is a RecorderError (13), of no type the syntax can read (15), or nested in another
+        // pattern (17).
+        #expect(SyntaxResolver.uses(of: invalid, in: corpus).map(\.line) == [13, 15, 17])
+        let failure = try #require(
+            SyntaxResolver.resolve(.qualified(types: ["Failure"], name: "invalid"), in: corpus).first)
+        #expect(SyntaxResolver.uses(of: failure, in: corpus).map(\.line) == [7, 14, 15, 17])
+    }
+
     @Test func `leaves out calls of a name that a property with a non-function type cannot answer`() throws {
         let corpus = table(
             """
