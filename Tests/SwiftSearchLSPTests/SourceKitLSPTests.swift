@@ -91,6 +91,40 @@ struct SourceKitLSPTests {
         #expect(!answers.unreachedIsIndexed)
     }
 
+    @Test func `holds no record of a package whose build-tool plugin does not build`() async throws {
+        let package = try DemoPackage()
+        defer { package.remove() }
+        // An Xcode-only plugin, as some app packages carry: SwiftPM cannot build it, so it cannot load the package.
+        try FileManager.default.createDirectory(
+            atPath: package.root + "/Plugins/XcodeOnly", withIntermediateDirectories: true)
+        try """
+        import PackagePlugin
+        import XcodeProjectPlugin
+
+        @main struct XcodeOnly: BuildToolPlugin {
+            func createBuildCommands(context: PluginContext, target: Target) throws -> [Command] { [] }
+        }
+        """.write(toFile: package.root + "/Plugins/XcodeOnly/XcodeOnly.swift", atomically: true, encoding: .utf8)
+        try """
+        // swift-tools-version: 6.0
+        import PackageDescription
+        let package = Package(
+            name: "Demo",
+            targets: [
+                .target(name: "Demo", plugins: ["XcodeOnly"]),
+                .plugin(name: "XcodeOnly", capability: .buildTool()),
+            ])
+        """.write(toFile: package.root + "/Package.swift", atomically: true, encoding: .utf8)
+        let welcome = SourcePosition(file: package.file, line: 7, column: 6)
+        // sourcekit-lsp 6.4 loads the package in process, building its plugins; `swiftPM.skipPlugins` does not
+        // reach that load, so the package stays out of the index whatever the options.
+        let answers = try await SourceKitLSP.withSession(workspace: package.root) { session in
+            (callers: try await session.callers(of: welcome), isIndexed: try await session.indexHasRecord(at: welcome))
+        }
+        #expect(answers.callers.isEmpty)
+        #expect(!answers.isIndexed)
+    }
+
     @Test func `refuses a workspace that is not a directory`() async throws {
         await #expect(throws: LanguageServerError.invalidWorkspace("/nonexistent/workspace")) {
             try await SourceKitLSP.withSession(workspace: "/nonexistent/workspace") { _ in () }

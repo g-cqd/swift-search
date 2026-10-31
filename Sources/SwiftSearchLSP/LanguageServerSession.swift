@@ -123,9 +123,10 @@ public final class LanguageServerSession: Sendable {
     /// The note for an empty answer about a symbol the index holds no record of.
     public static func unindexedNote(_ position: SourcePosition) -> String {
         "sourcekit-lsp's index holds no record of the symbol at \(position.file):\(position.line):\(position.column), "
-            + "so the empty answer says nothing about its uses: its background index builds the package for this "
-            + "machine, and leaves out a file outside every target or a package that does not build here (one for "
-            + "iOS only, for example). The syntax (usages) or a build's index store (usages --index-store) still answer."
+            + "so the empty answer says nothing about its uses. Its background index leaves out a file outside every "
+            + "target, and a whole package SwiftPM cannot load, as when a build-tool plugin does not build (an "
+            + "Xcode-only one, for example). The syntax (usages) or a build's index store (usages --index-store-path) "
+            + "still answer."
     }
 
     /// `textDocument/hover`: the declaration and documentation of the symbol at `position`, as text.
