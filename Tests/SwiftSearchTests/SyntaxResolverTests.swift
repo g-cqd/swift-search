@@ -148,12 +148,43 @@ import Testing
             """)
         let invalid = try #require(
             SyntaxResolver.resolve(.qualified(types: ["RecorderError"], name: "invalid"), in: corpus).first)
-        // Kept: the subject is a RecorderError (13), of no type the syntax can read (15), or nested in another
-        // pattern (17).
-        #expect(SyntaxResolver.uses(of: invalid, in: corpus).map(\.line) == [13, 15, 17])
+        // Kept: the subject is a RecorderError (13) or of no type the syntax can read (15). Line 17 matches the
+        // optional's wrapped Engine.Failure.
+        #expect(SyntaxResolver.uses(of: invalid, in: corpus).map(\.line) == [13, 15])
         let failure = try #require(
             SyntaxResolver.resolve(.qualified(types: ["Failure"], name: "invalid"), in: corpus).first)
         #expect(SyntaxResolver.uses(of: failure, in: corpus).map(\.line) == [7, 14, 15, 17])
+    }
+
+    @Test func `follows a nested pattern through the cases that hold it, and a catch to its do's thrown type`() throws {
+        let corpus = table(
+            """
+            enum RecorderError: Error { case invalid(from: Int, action: String) }
+            enum EngineError: Error { case invalid(from: Int, calling: String) }
+            enum Wrapper: Error { case recording(RecorderError), engine(id: Int, EngineError) }
+            func describe(wrapper: Wrapper) {
+                switch wrapper {
+                case .recording(.invalid(let from, let action)): _ = (from, action)
+                case .engine(_, .invalid(let from, let calling)): _ = (from, calling)
+                case Wrapper.recording(.invalid(let all)): _ = all
+                default: break
+                }
+            }
+            func pause() {
+                do throws(EngineError) { try run() } catch .invalid(let from, let calling) { _ = (from, calling) }
+                do { try run() } catch .invalid(let from, let action) { _ = (from, action) }
+            }
+            """)
+        func uses(_ type: String) throws -> [Int] {
+            let invalid = try #require(
+                SyntaxResolver.resolve(.qualified(types: [type], name: "invalid"), in: corpus).first)
+            return SyntaxResolver.uses(of: invalid, in: corpus).map(\.line)
+        }
+        // Line 14's do names no thrown type, so its catch stays a use of both.
+        let recorder = try uses("RecorderError")
+        let engine = try uses("EngineError")
+        #expect(recorder == [6, 8, 14])
+        #expect(engine == [7, 13, 14])
     }
 
     @Test func `leaves out calls of a name that a property with a non-function type cannot answer`() throws {
