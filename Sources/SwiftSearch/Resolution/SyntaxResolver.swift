@@ -27,13 +27,15 @@ public enum SyntaxResolver {
     /// The references in `table` whose name is `match`'s name: every use of the name, not only those the compiler
     /// would resolve to `match`. A use through a written base (`Foo.bar`) is kept only when the base ends with
     /// `match`'s enclosing type, or names no type (`self.bar`, `value.bar`); a call only when its argument labels fit
-    /// `match`'s parameters, and never for a property whose declared type is not a function.
+    /// `match`'s parameters, and never for a property whose declared type is not a function. A leading-dot pattern whose
+    /// subject has a written type is kept only when that type is `match`'s enclosing type or names no type.
     /// - Complexity: O(*k*) in the references with the name.
     public static func uses(of match: SymbolMatch, in table: SymbolTable) -> [Usage] {
         let container = match.containingType
         return table.uses(of: match.name).compactMap { use in
             let reference = use.reference
-            if let base = reference.base, let container {
+            // A pattern's subject type names the enum as a written base would.
+            if let base = reference.base ?? reference.subjectType, let container {
                 let last = base.split(separator: ".").last.map(String.init) ?? base
                 if table.typeNames.contains(last), last != container { return nil }
             }

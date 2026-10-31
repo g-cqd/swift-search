@@ -18,14 +18,22 @@ public struct Reference: Sendable, Hashable, Codable {
     /// The argument labels of a call, `nil` for an unlabeled argument; nil when the use is not a call. A trailing
     /// closure is not listed.
     public let arguments: [String?]?
+    /// For a leading-dot member at the top of a pattern (`case .moved(let to)`), the type of the subject it is matched
+    /// against when the syntax gives it: `Self`'s name for `switch self`, the declared type of a parameter for
+    /// `switch value`, an optional's wrapped type; nil otherwise.
+    public let subjectType: String?
 
-    public init(name: String, line: Int, column: Int, role: Role, base: String? = nil, arguments: [String?]? = nil) {
+    public init(
+        name: String, line: Int, column: Int, role: Role, base: String? = nil, arguments: [String?]? = nil,
+        subjectType: String? = nil
+    ) {
         self.name = name
         self.line = line
         self.column = column
         self.role = role
         self.base = base
         self.arguments = arguments
+        self.subjectType = subjectType
     }
 
     /// Whether a call with these arguments can call a function with `signature`: each label, in order, is the label
