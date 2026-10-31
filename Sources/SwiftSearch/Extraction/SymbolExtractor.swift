@@ -232,9 +232,13 @@ final class SymbolVisitor: SyntaxVisitor {
         guard !name.isEmpty, name != "self", name != "Self", name != "super" else { return .visitChildren }
         var expression = Syntax(node)
         var base: String?
+        var subjectType: String?
         if let member = node.parent?.as(MemberAccessExprSyntax.self), member.declName.id == node.id {
             expression = Syntax(member)
             base = member.base.flatMap(Self.baseName)
+            if member.base == nil, let subject = Self.patternSubject(of: member) {
+                subjectType = self.type(of: subject)
+            }
         }
         let location = converter.location(for: node.baseName.positionAfterSkippingLeadingTrivia)
         let role = Self.role(of: expression)
@@ -242,7 +246,7 @@ final class SymbolVisitor: SyntaxVisitor {
         references.append(
             Reference(
                 name: name, line: location.line, column: location.column, role: role, base: base,
-                arguments: arguments.map { $0.map { $0.label?.text } }))
+                arguments: arguments.map { $0.map { $0.label?.text } }, subjectType: subjectType))
         return .visitChildren
     }
 
@@ -398,6 +402,64 @@ final class SymbolVisitor: SyntaxVisitor {
     private static func isAlphanumeric(_ byte: UInt8) -> Bool {
         (UInt8(ascii: "a")...UInt8(ascii: "z")).contains(byte) || (UInt8(ascii: "A")...UInt8(ascii: "Z")).contains(byte)
             || (UInt8(ascii: "0")...UInt8(ascii: "9")).contains(byte)
+    }
+
+    /// The subject a leading-dot member is matched against when it is the whole pattern of a `switch` case or of an
+    /// `if`, `guard` or `while case`, alone or called (`.moved(let to)`); nil inside another pattern (`.some(.moved)`).
+    private static func patternSubject(of member: MemberAccessExprSyntax) -> ExprSyntax? {
+        var node = Syntax(member)
+        if let call = node.parent?.as(FunctionCallExprSyntax.self), call.calledExpression.id == node.id {
+            node = Syntax(call)
+        }
+        guard var pattern = node.parent?.as(ExpressionPatternSyntax.self).map(Syntax.init) else { return nil }
+        while let binding = pattern.parent?.as(ValueBindingPatternSyntax.self) { pattern = Syntax(binding) }
+        if let condition = pattern.parent?.as(MatchingPatternConditionSyntax.self) {
+            return condition.initializer.value
+        }
+        guard pattern.parent?.is(SwitchCaseItemSyntax.self) == true else { return nil }
+        var ancestor = pattern.parent
+        while let current = ancestor, !current.is(SwitchExprSyntax.self) { ancestor = current.parent }
+        return ancestor?.as(SwitchExprSyntax.self)?.subject
+    }
+
+    /// The type of `subject` as the syntax gives it: the enclosing type for `self`, and for a parameter of the
+    /// enclosing function, initializer or subscript, the last name of its declared type, an optional's wrapped one.
+    /// A closure between the two may rebind the name, so its parameters stop the search.
+    private func type(of subject: ExprSyntax) -> String? {
+        guard let reference = subject.as(DeclReferenceExprSyntax.self) else { return nil }
+        let name = reference.baseName.text
+        if name == "self" { return containers.last?.names.last }
+        var ancestor = subject.parent
+        while let node = ancestor {
+            if node.is(ClosureExprSyntax.self) { return nil }
+            let parameters: FunctionParameterListSyntax? =
+                node.as(FunctionDeclSyntax.self)?.signature.parameterClause.parameters
+                ?? node.as(InitializerDeclSyntax.self)?.signature.parameterClause.parameters
+                ?? node.as(SubscriptDeclSyntax.self)?.parameterClause.parameters
+            if let parameters {
+                let parameter = parameters.first { ($0.secondName ?? $0.firstName).text == name }
+                return parameter.flatMap { Self.typeName($0.type) }
+            }
+            ancestor = node.parent
+        }
+        return nil
+    }
+
+    /// `Outer.Inner` as `Inner`, `Value?` as `Value`; nil for a type with no single name (a tuple, a function).
+    private static func typeName(_ type: TypeSyntax) -> String? {
+        var type = type
+        // Each wrapper peels one level: a loop, not recursion.
+        while true {
+            if let optional = type.as(OptionalTypeSyntax.self) {
+                type = optional.wrappedType
+            } else if let unwrapped = type.as(ImplicitlyUnwrappedOptionalTypeSyntax.self) {
+                type = unwrapped.wrappedType
+            } else if let attributed = type.as(AttributedTypeSyntax.self) {
+                type = attributed.baseType
+            } else {
+                return type.is(IdentifierTypeSyntax.self) || type.is(MemberTypeSyntax.self) ? typePath(type).last : nil
+            }
+        }
     }
 
     /// How the expression `node` (a name, or a member access) is used by its parent.
