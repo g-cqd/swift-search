@@ -49,8 +49,10 @@ file, a malformed query), 70 for an internal failure, 74 when the output could n
   left out, and so is a call of a property whose declared type is not a function; everything else is reported and marked
   `(by name)`. An enum case's associated values are its labels: `.moved(by: 1)` is not a use of `case moved(to:)`, and a
   pattern without labels (`case .moved(let value)`) is left out when its subject's written type is another type of the
-  corpus (`switch self` in another enum, `switch value` for a parameter declared as one); otherwise it is kept for
-  every case of the name. `Type(...)` is a use of the type, not of its `init`. Facts are cached per file (analyzerkit `CorpusScan`),
+  corpus (`switch self` in another enum, `switch value` for a parameter declared as one, a `catch` under
+  `do throws(Other)`), followed through the cases it is nested in (`.recording(.moved(let value))` takes the type
+  `recording` declares); otherwise, as for a `catch` whose thrown type is inferred, it is kept for every case of the
+  name. `Type(...)` is a use of the type, not of its `init`. Facts are cached per file (analyzerkit `CorpusScan`),
   so a second run parses only the files that changed.
 - **Index store.** Opened through analyzerkit `IndexStoreSupport`: the store found for the project (SwiftPM's
   `.build`, then Xcode's DerivedData) or `--index-store-path`, its database under the cache directory, never beside the

@@ -233,11 +233,16 @@ final class SymbolVisitor: SyntaxVisitor {
         var expression = Syntax(node)
         var base: String?
         var subjectType: String?
+        var subjectPath: [Reference.PatternStep] = []
         if let member = node.parent?.as(MemberAccessExprSyntax.self), member.declName.id == node.id {
             expression = Syntax(member)
             base = member.base.flatMap(Self.baseName)
-            if member.base == nil, let subject = Self.patternSubject(of: member) {
-                subjectType = self.type(of: subject)
+            if member.base == nil, let pattern = Self.patternSubject(of: member) {
+                subjectPath = pattern.path
+                switch pattern.subject {
+                case .expression(let subject): subjectType = self.type(of: subject)
+                case .type(let type): subjectType = type
+                }
             }
         }
         let location = converter.location(for: node.baseName.positionAfterSkippingLeadingTrivia)
@@ -246,7 +251,8 @@ final class SymbolVisitor: SyntaxVisitor {
         references.append(
             Reference(
                 name: name, line: location.line, column: location.column, role: role, base: base,
-                arguments: arguments.map { $0.map { $0.label?.text } }, subjectType: subjectType))
+                arguments: arguments.map { $0.map { $0.label?.text } }, subjectType: subjectType,
+                subjectPath: subjectPath))
         return .visitChildren
     }
 
@@ -404,22 +410,73 @@ final class SymbolVisitor: SyntaxVisitor {
             || (UInt8(ascii: "0")...UInt8(ascii: "9")).contains(byte)
     }
 
-    /// The subject a leading-dot member is matched against when it is the whole pattern of a `switch` case or of an
-    /// `if`, `guard` or `while case`, alone or called (`.moved(let to)`); nil inside another pattern (`.some(.moved)`).
-    private static func patternSubject(of member: MemberAccessExprSyntax) -> ExprSyntax? {
+    /// What a pattern is matched against: an expression, or a type the syntax names outright.
+    private enum PatternSubject {
+        case expression(ExprSyntax)
+        case type(String)
+    }
+
+    /// The subject of the pattern a leading-dot member is part of, alone or called (`.moved(let to)`), and the enum
+    /// case patterns it is nested in (`.recording(.moved(let to))`), outermost first. The pattern is a `switch` case's,
+    /// an `if`, `guard` or `while case`'s, or a `catch`'s, whose subject is the type its `do throws(T)` names. An
+    /// outer case written with its type (`Wrapper.recording(…)`) gives that type. Nil for any other place, a tuple
+    /// pattern for example.
+    private static func patternSubject(of member: MemberAccessExprSyntax)
+        -> (subject: PatternSubject, path: [Reference.PatternStep])?
+    {
+        var path: [Reference.PatternStep] = []
         var node = Syntax(member)
-        if let call = node.parent?.as(FunctionCallExprSyntax.self), call.calledExpression.id == node.id {
-            node = Syntax(call)
+        // Each enclosing case pattern is one step out: a loop, not recursion.
+        while true {
+            if let call = node.parent?.as(FunctionCallExprSyntax.self), call.calledExpression.id == node.id {
+                node = Syntax(call)
+            }
+            if let chaining = node.parent?.as(OptionalChainingExprSyntax.self) { node = Syntax(chaining) }
+            guard let argument = node.parent?.as(LabeledExprSyntax.self),
+                let list = argument.parent?.as(LabeledExprListSyntax.self),
+                let call = list.parent?.as(FunctionCallExprSyntax.self),
+                let outer = call.calledExpression.as(MemberAccessExprSyntax.self)
+            else { break }
+            let index = list.firstIndex { $0.id == argument.id }.map { list.distance(from: list.startIndex, to: $0) }
+            guard let index else { return nil }
+            path.insert(Reference.PatternStep(caseName: outer.declName.baseName.text, argument: index), at: 0)
+            if let written = outer.base {
+                guard let type = baseName(written)?.split(separator: ".").last.map(String.init),
+                    isInPattern(Syntax(call))
+                else { return nil }
+                return (.type(type), path)
+            }
+            node = Syntax(outer)
         }
         guard var pattern = node.parent?.as(ExpressionPatternSyntax.self).map(Syntax.init) else { return nil }
         while let binding = pattern.parent?.as(ValueBindingPatternSyntax.self) { pattern = Syntax(binding) }
         if let condition = pattern.parent?.as(MatchingPatternConditionSyntax.self) {
-            return condition.initializer.value
+            return (.expression(condition.initializer.value), path)
+        }
+        if pattern.parent?.is(CatchItemSyntax.self) == true {
+            var ancestor = pattern.parent
+            while let current = ancestor, !current.is(DoStmtSyntax.self) { ancestor = current.parent }
+            guard let type = ancestor?.as(DoStmtSyntax.self)?.throwsClause?.type, let name = typeName(type) else {
+                return nil
+            }
+            return (.type(name), path)
         }
         guard pattern.parent?.is(SwitchCaseItemSyntax.self) == true else { return nil }
         var ancestor = pattern.parent
         while let current = ancestor, !current.is(SwitchExprSyntax.self) { ancestor = current.parent }
-        return ancestor?.as(SwitchExprSyntax.self)?.subject
+        guard let statement = ancestor?.as(SwitchExprSyntax.self) else { return nil }
+        return (.expression(statement.subject), path)
+    }
+
+    /// Whether `node` (an expression) is, through calls and arguments, an expression pattern.
+    private static func isInPattern(_ node: Syntax) -> Bool {
+        var ancestor = node.parent
+        while let current = ancestor {
+            if current.is(ExpressionPatternSyntax.self) { return true }
+            if current.is(CodeBlockItemSyntax.self) || current.is(MemberBlockItemSyntax.self) { return false }
+            ancestor = current.parent
+        }
+        return false
     }
 
     /// The type of `subject` as the syntax gives it: the enclosing type for `self`, and for a parameter of the
