@@ -57,10 +57,11 @@ file, a malformed query), 70 for an internal failure, 74 when the output could n
 - **sourcekit-lsp.** The selected toolchain's server (`DEVELOPER_DIR`, else `xcrun --find sourcekit-lsp`), checked by
   analyzerkit's `BinaryTrustChecker` before it runs, in a process group of its own that is stopped with the command.
   Queries answered from sourcekit-lsp's index wait for its background index first (`workspace/synchronize`), which the
-  first run in a package builds. An Xcode project needs a build server (for example `xcode-build-server`). The
-  background index builds for this machine, so a package that does not build here (one for iOS only) or a file outside
-  every target has no record in it: an empty answer about such a symbol comes with a note that says so (`notes` in
-  JSON and MCP), and `usages`, with or without `--index-store-path`, still answers.
+  first run in a package builds. An Xcode project needs a build server (for example `xcode-build-server`). A file
+  outside every target has no record in sourcekit-lsp's index, nor does a whole package SwiftPM cannot load, as when a
+  build-tool plugin does not build (an Xcode-only one importing `XcodeProjectPlugin`; `swiftPM.skipPlugins` does not
+  help in 6.4). An empty answer about such a symbol comes with a note that says so (`notes` in JSON and MCP), and
+  `usages`, with or without `--index-store-path`, still answers.
 
 ## MCP server
 
