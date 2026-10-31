@@ -35,7 +35,7 @@ public enum SyntaxResolver {
         return table.uses(of: match.name).compactMap { use in
             let reference = use.reference
             // A pattern's subject type names the enum as a written base would.
-            if let base = reference.base ?? reference.subjectType, let container {
+            if let base = reference.base ?? patternType(reference, in: table), let container {
                 let last = base.split(separator: ".").last.map(String.init) ?? base
                 if table.typeNames.contains(last), last != container { return nil }
             }
@@ -57,6 +57,37 @@ public enum SyntaxResolver {
                 file: use.file, line: reference.line, column: reference.column, role: role(reference.role),
                 symbol: match.qualifiedSelector, isResolved: false)
         }
+    }
+
+    /// The type a pattern's leading-dot member is matched against: its subject's type, then, for each enum case
+    /// pattern it is nested in, the type of that case's associated value at the step's position, as the corpus
+    /// declares it. `.some` keeps the type, which is already an optional's wrapped one. Nil when a step names no case
+    /// of the type, or a value whose type has no single name.
+    /// - Complexity: O(*s* · *k*) in the steps and the declarations with each step's name.
+    static func patternType(_ reference: Reference, in table: SymbolTable) -> String? {
+        guard var type = reference.subjectType else { return nil }
+        for step in reference.subjectPath {
+            if step.caseName == "some", step.argument == 0 { continue }
+            let holder = table.declarations(named: step.caseName).first {
+                $0.declaration.kind == .enumCase && $0.declaration.containers.last == type
+            }
+            guard let parameters = holder?.declaration.signature?.parameters, step.argument < parameters.count,
+                let next = typeName(parameters[step.argument].type)
+            else { return nil }
+            type = next
+        }
+        return type
+    }
+
+    /// `Outer.Inner?` as `Inner`; nil for a type written with anything but names and dots (generics, tuples,
+    /// functions).
+    private static func typeName(_ written: String) -> String? {
+        var text = Substring(written)
+        while let last = text.last, last == "?" || last == "!" { text = text.dropLast() }
+        guard !text.isEmpty, text.allSatisfy({ $0 == "." || $0 == "_" || $0.isLetter || $0.isNumber }) else {
+            return nil
+        }
+        return text.split(separator: ".").last.map(String.init)
     }
 
     private static func match(_ entry: SymbolTable.Entry) -> SymbolMatch {

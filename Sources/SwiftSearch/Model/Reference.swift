@@ -18,14 +18,29 @@ public struct Reference: Sendable, Hashable, Codable {
     /// The argument labels of a call, `nil` for an unlabeled argument; nil when the use is not a call. A trailing
     /// closure is not listed.
     public let arguments: [String?]?
-    /// For a leading-dot member at the top of a pattern (`case .moved(let to)`), the type of the subject it is matched
+    /// For a leading-dot member in a pattern (`case .moved(let to)`), the type of the subject the pattern is matched
     /// against when the syntax gives it: `Self`'s name for `switch self`, the declared type of a parameter for
-    /// `switch value`, an optional's wrapped type; nil otherwise.
+    /// `switch value`, the type a `do throws(T)` names for its `catch`, an optional's wrapped type; nil otherwise.
     public let subjectType: String?
+    /// For a leading-dot member nested in other enum case patterns (`case .recording(.moved(let to))`), those cases from
+    /// the outermost in, each with the position of the argument that holds the next; `subjectType` is then the type of
+    /// the outermost one's subject. Empty for a member that is the whole pattern.
+    public let subjectPath: [PatternStep]
+
+    /// One enum case pattern a nested pattern is an argument of.
+    public struct PatternStep: Sendable, Hashable, Codable {
+        public let caseName: String
+        public let argument: Int
+
+        public init(caseName: String, argument: Int) {
+            self.caseName = caseName
+            self.argument = argument
+        }
+    }
 
     public init(
         name: String, line: Int, column: Int, role: Role, base: String? = nil, arguments: [String?]? = nil,
-        subjectType: String? = nil
+        subjectType: String? = nil, subjectPath: [PatternStep] = []
     ) {
         self.name = name
         self.line = line
@@ -34,6 +49,7 @@ public struct Reference: Sendable, Hashable, Codable {
         self.base = base
         self.arguments = arguments
         self.subjectType = subjectType
+        self.subjectPath = subjectPath
     }
 
     /// Whether a call with these arguments can call a function with `signature`: each label, in order, is the label
