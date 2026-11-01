@@ -1,12 +1,7 @@
 internal import AemiJSON
+internal import Foundation
 internal import ReportSupport
 internal import SwiftSearch
-
-#if canImport(FoundationEssentials)
-    internal import FoundationEssentials
-#else
-    internal import Foundation
-#endif
 
 /// The standard output could not be written.
 struct OutputError: Error, CustomStringConvertible {

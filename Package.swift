@@ -28,14 +28,14 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.8.2"),
         // The project model, source discovery, bounded reads, index-store sessions and CLI surface of the family.
         .package(
-            url: "https://github.com/g-cqd/analyzerkit.git", revision: "2bcc2d16c608bec91dec2e2ca5afaef5e21b689e"),
+            url: "https://github.com/g-cqd/analyzerkit.git", revision: "220803df78ec5ef9c8cc91b1cb0fe9d04c3bc936"),
         // Bounded concurrency (AemiRuntime). The revision analyzerkit pins: one revision per package in a graph.
-        .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "8087a01fdb7d87fbaba01e9e6994c2afb238aefb"),
+        .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "2a0ce71b93918ffdcc961ba4db8d01b66e5915f1"),
         // The JSON of the MCP and LSP wires and of `--format json`.
-        .package(url: "https://github.com/g-cqd/AemiJSON.git", revision: "1cc3781edaff0847a57ab585d65faab0c5b33b09"),
+        .package(url: "https://github.com/g-cqd/AemiJSON.git", revision: "e42298a5fd81cbb3f279d1de1f4a2db7556f4f2d"),
         // Linear-time regular expressions: a query pattern is attacker input over MCP, and no pattern can make a search
         // exponential. The revision AemiJSON resolves.
-        .package(url: "https://github.com/g-cqd/AemiRegex.git", revision: "0b991407673bb996913725e16b1865fe8637442f"),
+        .package(url: "https://github.com/g-cqd/AemiRegex.git", revision: "7c181ba9ee0556e08cfa0c91f5fb950fc3f176d4"),
         // The sourcekit-lsp child process: a session of its own, torn down with its descendants.
         .package(url: "https://github.com/swiftlang/swift-subprocess.git", from: "1.0.2", traits: []),
         // FileDescriptor off Apple platforms, where the System framework is not there.
