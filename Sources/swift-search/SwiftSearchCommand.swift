@@ -1,12 +1,7 @@
 internal import AnalyzerCLI
 public import ArgumentParser
+internal import Foundation
 public import SwiftSearch
-
-#if canImport(FoundationEssentials)
-    internal import FoundationEssentials
-#else
-    internal import Foundation
-#endif
 
 @main
 struct SwiftSearchCommand: AsyncParsableCommand {

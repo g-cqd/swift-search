@@ -1,12 +1,7 @@
 internal import AemiJSON
+internal import Foundation
 internal import SourceCorpus
 internal import Synchronization
-
-#if canImport(FoundationEssentials)
-    internal import FoundationEssentials
-#else
-    internal import Foundation
-#endif
 
 /// The questions swift-search asks sourcekit-lsp, in swift-search's positions: 1-based lines, 1-based UTF-8 columns.
 ///
@@ -39,7 +34,7 @@ public final class LanguageServerSession: Sendable {
                 "processId": .int(Int64(ProcessInfo.processInfo.processIdentifier)),
                 "rootUri": .string(root),
                 "workspaceFolders": [
-                    ["uri": .string(root), "name": .string((workspace as NSString).lastPathComponent)]
+                    ["uri": .string(root), "name": .string(URL(filePath: workspace).lastPathComponent)]
                 ],
                 "capabilities": [
                     "general": ["positionEncodings": ["utf-8", "utf-16"]],

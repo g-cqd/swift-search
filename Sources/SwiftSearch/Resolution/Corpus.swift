@@ -1,13 +1,9 @@
 internal import CorpusScan
+// ObjCBool, which `fileExists(atPath:isDirectory:)` takes, is not in FoundationEssentials on Linux.
+internal import Foundation
 internal import ProjectModel
 public import ReportSupport
 internal import SourceCorpus
-
-#if canImport(FoundationEssentials)
-    internal import FoundationEssentials
-#else
-    internal import Foundation
-#endif
 
 /// The Swift files under a set of paths, with their symbols.
 public struct Corpus: Sendable {
@@ -113,7 +109,8 @@ public struct Corpus: Sendable {
 
     /// The facts cache's default directory: `~/Library/Caches/swift-search` on macOS.
     public static var defaultCacheRoot: String {
-        CacheLocation.defaultRoot(
-            tool: ToolInfo.name, environment: ProcessInfo.processInfo.environment, home: NSHomeDirectory())
+        let environment = ProcessInfo.processInfo.environment
+        return CacheLocation.defaultRoot(
+            tool: ToolInfo.name, environment: environment, home: environment["HOME"] ?? "/tmp")
     }
 }

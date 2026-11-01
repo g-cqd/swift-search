@@ -1,3 +1,5 @@
+// ObjCBool, which `fileExists(atPath:isDirectory:)` takes, is not in FoundationEssentials on Linux.
+internal import Foundation
 internal import IndexStoreSupport
 internal import Subprocess
 
@@ -5,11 +7,6 @@ internal import Subprocess
     internal import System
 #else
     internal import SystemPackage
-#endif
-#if canImport(FoundationEssentials)
-    internal import FoundationEssentials
-#else
-    internal import Foundation
 #endif
 
 /// Runs the toolchain's sourcekit-lsp for the length of a closure.

@@ -1,15 +1,10 @@
 internal import AnalyzerCLI
 internal import ArgumentParser
+internal import Foundation
 internal import ProjectModel
 internal import SourceCorpus
 internal import SwiftSearch
 internal import SwiftSearchLSP
-
-#if canImport(FoundationEssentials)
-    internal import FoundationEssentials
-#else
-    internal import Foundation
-#endif
 
 /// `swift-search lsp`: questions for the toolchain's sourcekit-lsp.
 struct LSP: AsyncParsableCommand {
