@@ -1,0 +1,18 @@
+{
+  "swift": { "parallel": false },
+  "quality": {
+    "paths": ["Sources"],
+    "include": ["/Package.swift", "Sources/**", "Tests/**"]
+  },
+  "release": { "executables": ["swift-search"] },
+  "localChecks": ["quality", "debug", "self-analysis"],
+  "commands": [
+    { "id": "no-gcd", "title": "Quality · GCD Ban", "run": "Scripts/no-gcd.sh", "after": "quality" },
+    {
+      "id": "self-analysis",
+      "title": "Quality · Self Analysis",
+      "run": "swift run swift-search find SymbolExtractor Sources --no-cache",
+      "after": "linux-debug"
+    }
+  ]
+}
