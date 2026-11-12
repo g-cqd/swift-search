@@ -28,7 +28,7 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.8.2"),
         // The project model, source discovery, bounded reads, index-store sessions and CLI surface of the family.
         .package(
-            url: "https://github.com/g-cqd/analyzerkit.git", revision: "92e9487329e40e88d76231faaea3272eb533e18e"),
+            url: "https://github.com/g-cqd/analyzerkit.git", revision: "37ce3bbe0492fd668206802343cfc0c9eac73291"),
         // Bounded concurrency (AemiRuntime). The revision analyzerkit pins: one revision per package in a graph.
         .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "0bae2edb1a89bd3d931fb3122c2184cc5c368834"),
         // The JSON of the MCP and LSP wires and of `--format json`.
