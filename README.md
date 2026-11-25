@@ -35,3 +35,9 @@ swift-search shares its source discovery, cache and reports with the [analyzers]
 and began as the symbol search of [SwiftStaticAnalysis](https://github.com/g-cqd/SwiftStaticAnalysis).
 
 [MIT](LICENSE)
+
+## Contributing & Security
+
+- [Contributing](CONTRIBUTING.md)
+- [Security](SECURITY.md)
+- [License](LICENSE)
