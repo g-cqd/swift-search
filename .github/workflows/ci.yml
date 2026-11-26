@@ -21,4 +21,17 @@ jobs:
     uses: g-cqd/swift-ci/.github/workflows/swift-ci.yml@f5edf0095e3033975b61e5c328cb7464ce1bb7e3 # swift-ci f5edf00
     permissions:
       contents: write # only used to publish a tag
-    secrets: inherit
+    secrets:
+      DEVELOPER_ID_P12: ${{ secrets.DEVELOPER_ID_P12 }}
+      DEVELOPER_ID_P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+      NOTARY_KEY: ${{ secrets.NOTARY_KEY }}
+      NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+      NOTARY_ISSUER: ${{ secrets.NOTARY_ISSUER }}
+
+  scan:
+    name: Code Scanning
+    uses: g-cqd/swift-ci/.github/workflows/code-scanning.yml@fda8ff085332c1883685384f975dff7227b1f7e5 # swift-ci fda8ff0
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
