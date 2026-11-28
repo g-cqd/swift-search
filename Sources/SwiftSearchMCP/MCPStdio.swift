@@ -1,5 +1,6 @@
 internal import AemiJSON
 public import AemiJSONRPC
+internal import AemiMCP
 internal import AemiRuntime
 public import SwiftSearchLSP
 internal import Synchronization
@@ -21,41 +22,14 @@ public enum MCPStdio {
     /// Serves `server` on the lines of `input` until it ends, writing each answer as a line to `output`, then shuts
     /// `pool` down and waits for its sessions to stop.
     @concurrent public static func serve(
-        _ server: MCPServer, input: some AsyncSequence<[UInt8], any Error>, output: any MessageSink,
+        _ server: MCPServer, input: some AsyncSequence<[UInt8], any Error> & Sendable, output: any MessageSink,
         pool: LanguageServerPool?
     ) async {
         await withTaskGroup(of: Void.self) { group in
             if let pool { group.addTask { await pool.run() } }
-            await withTaskGroup(of: Void.self) { requests in
-                var inFlight = 0
-                var framing = LineFraming(maximumLineLength: maximumLineLength)
-                do {
-                    for try await chunk in input {
-                        for line in framing.append(chunk) {
-                            guard case .message(let message) = line else {
-                                try? await output.write(
-                                    MCPServer.failure(
-                                        id: .null, code: -32700,
-                                        message: "parse error: a line is longer than \(maximumLineLength) bytes")
-                                        + [UInt8(ascii: "\n")])
-                                continue
-                            }
-                            if inFlight == maximumConcurrentRequests {
-                                await requests.next()
-                                inFlight -= 1
-                            }
-                            inFlight += 1
-                            requests.addTask {
-                                if let answer = await server.handle(message) {
-                                    try? await output.write(answer + [UInt8(ascii: "\n")])
-                                }
-                            }
-                        }
-                    }
-                } catch {
-                    // The input broke: stop reading, finish what is in flight.
-                }
-            }
+            await MCPStdioServer.serve(
+                server.protocolHandler, input: input, output: output, maximumLineLength: maximumLineLength,
+                maxConcurrentRequests: maximumConcurrentRequests)
             pool?.shutdown()
         }
     }

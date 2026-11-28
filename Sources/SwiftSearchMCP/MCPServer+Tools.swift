@@ -1,10 +1,56 @@
 internal import AemiJSON
+internal import AemiJSONRPC
+internal import AemiMCP
 internal import ProjectModel
 internal import ReportSupport
 internal import SwiftSearch
 internal import SwiftSearchLSP
 
-extension MCPServer {
+/// What the tools do, given the root they resolve paths against, the facts cache and the sourcekit-lsp sessions.
+struct SearchTools: Sendable {
+    /// The most results a tool returns.
+    static let maximumLimit = 2000
+
+    let root: String
+    let cacheRoot: String?
+    let languageServers: (any LanguageServerProvider)?
+    private let presenter: PathPresenter
+
+    init(root: String, cacheRoot: String?, languageServers: (any LanguageServerProvider)?) {
+        self.root = root
+        self.cacheRoot = cacheRoot
+        self.languageServers = languageServers
+        presenter = PathPresenter(root: root)
+    }
+
+    /// The tool `name`'s result as text; a bad argument or a failing query is the tool's error, an unknown tool a protocol
+    /// error.
+    func call(_ name: String, _ arguments: ToolArguments) async throws -> MCPToolResult {
+        let text: [UInt8]
+        do {
+            switch name {
+            case ToolCatalog.search: text = try await search(arguments)
+            case ToolCatalog.usages: text = try await usages(arguments)
+            case ToolCatalog.workspaceSymbols: text = try await workspaceSymbols(arguments)
+            case let tool where ToolCatalog.positionTools.contains(tool): text = try await position(tool, arguments)
+            default: throw JSONRPCError(code: JSONRPCError.invalidParams, message: "unknown tool: \(name)")
+            }
+        } catch let error as ArgumentError {
+            return .error(error.message)
+        }
+        return .text(String(decoding: text, as: UTF8.self))
+    }
+
+    /// A path as the tools report it: relative inside the root, absolute outside.
+    func present(_ path: String) -> String {
+        presenter.path(path)
+    }
+
+    /// A tool's path argument, absolute.
+    func resolve(_ path: String) -> String {
+        path.hasPrefix("/") ? path : root + "/" + path
+    }
+
     /// What a search tool returns.
     private struct SearchOutput: Encodable {
         let matches: [MatchRecord]

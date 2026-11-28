@@ -19,7 +19,7 @@ swift-search mcp --root path/to/project
 
 ## Install
 
-Build with Swift 6.4 on macOS 15 or later (Linux is not tested yet):
+Build with Swift 6.4 on macOS 15.6 or later (Linux is not tested yet):
 
 ```sh
 swift build -c release

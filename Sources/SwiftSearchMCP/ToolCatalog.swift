@@ -1,4 +1,5 @@
 internal import AemiJSON
+internal import AemiMCP
 internal import SwiftSearch
 
 /// The tools the server lists, with their input schemas.
@@ -16,43 +17,42 @@ enum ToolCatalog {
     /// The tools that ask sourcekit-lsp about one position.
     static let positionTools = [definition, references, implementations, hover, callers, callees]
 
-    static var tools: JSONValue {
-        .array(
-            [
-                tool(
-                    search,
-                    """
-                    Find Swift declarations by name in the source files, without a build. The query is a name (shared), \
-                    a qualified name (Client.shared, Outer.Inner.member), a selector (fetch(id:_:), Client.fetch(id:)), \
-                    a regex over whole names (/load.*/, RE2 syntax), or a USR (s:...; needs index_store). Returns each \
-                    declaration's symbol, kind, access, location (path:line:column, UTF-8 column, relative to the root \
-                    when inside it), signature, and the context asked for.
-                    """,
-                    properties: queryProperties.merging(contextProperties) { first, _ in first }, required: ["query"]),
-                tool(
-                    usages,
-                    """
-                    Find where the declarations a query names are used. With index_store, only the uses the compiler \
-                    resolved to them (resolved: true), from a build's index store; without it, every use of the name \
-                    (resolved: false) except through a base that names another type.
-                    """,
-                    properties: queryProperties, required: ["query"]),
-                tool(
-                    workspaceSymbols,
-                    "Ask sourcekit-lsp for the symbols matching a query (its fuzzy match), across the workspace's index.",
-                    properties: [
-                        "query": property("string", "The text to match."), "workspace": workspaceProperty,
-                    ], required: ["query"]),
-                positionTool(definition, "Ask sourcekit-lsp where the symbol is declared."),
-                positionTool(references, "Ask sourcekit-lsp for every reference to the symbol, from its index."),
-                positionTool(
-                    implementations,
-                    "Ask sourcekit-lsp for the implementations of a protocol requirement or the "
-                        + "overrides of a member."),
-                positionTool(hover, "Ask sourcekit-lsp for the declaration and documentation of the symbol."),
-                positionTool(callers, "Ask sourcekit-lsp which functions call the function, and where."),
-                positionTool(callees, "Ask sourcekit-lsp which functions the function calls, and where."),
-            ])
+    static var tools: [MCPTool] {
+        [
+            tool(
+                search,
+                """
+                Find Swift declarations by name in the source files, without a build. The query is a name (shared), \
+                a qualified name (Client.shared, Outer.Inner.member), a selector (fetch(id:_:), Client.fetch(id:)), \
+                a regex over whole names (/load.*/, RE2 syntax), or a USR (s:...; needs index_store). Returns each \
+                declaration's symbol, kind, access, location (path:line:column, UTF-8 column, relative to the root \
+                when inside it), signature, and the context asked for.
+                """,
+                properties: queryProperties.merging(contextProperties) { first, _ in first }, required: ["query"]),
+            tool(
+                usages,
+                """
+                Find where the declarations a query names are used. With index_store, only the uses the compiler \
+                resolved to them (resolved: true), from a build's index store; without it, every use of the name \
+                (resolved: false) except through a base that names another type.
+                """,
+                properties: queryProperties, required: ["query"]),
+            tool(
+                workspaceSymbols,
+                "Ask sourcekit-lsp for the symbols matching a query (its fuzzy match), across the workspace's index.",
+                properties: [
+                    "query": property("string", "The text to match."), "workspace": workspaceProperty,
+                ], required: ["query"]),
+            positionTool(definition, "Ask sourcekit-lsp where the symbol is declared."),
+            positionTool(references, "Ask sourcekit-lsp for every reference to the symbol, from its index."),
+            positionTool(
+                implementations,
+                "Ask sourcekit-lsp for the implementations of a protocol requirement or the "
+                    + "overrides of a member."),
+            positionTool(hover, "Ask sourcekit-lsp for the declaration and documentation of the symbol."),
+            positionTool(callers, "Ask sourcekit-lsp which functions call the function, and where."),
+            positionTool(callees, "Ask sourcekit-lsp which functions the function calls, and where."),
+        ]
     }
 
     private static let workspaceProperty = property(
@@ -94,7 +94,7 @@ enum ToolCatalog {
         "scope": property("boolean", "Include the enclosing type or function and its lines."),
     ]
 
-    private static func positionTool(_ name: String, _ description: String) -> JSONValue {
+    private static func positionTool(_ name: String, _ description: String) -> MCPTool {
         tool(
             name,
             description
@@ -110,18 +110,16 @@ enum ToolCatalog {
     }
 
     private static func tool(_ name: String, _ description: String, properties: [String: JSONValue], required: [String])
-        -> JSONValue
+        -> MCPTool
     {
         var members: [(String, JSONValue)] = [("type", "object")]
         var ordered: [(String, JSONValue)] = []
         for key in properties.keys.sorted() { ordered.append((key, properties[key] ?? .null)) }
         members.append(("properties", .makeObject { for member in ordered { member } }))
         if !required.isEmpty { members.append(("required", .array(required.map { .string($0) }))) }
-        return [
-            "name": .string(name), "description": .string(description),
-            "inputSchema": .makeObject { for member in members { member } },
-            "annotations": ["readOnlyHint": true, "openWorldHint": false],
-        ]
+        return MCPTool(
+            name: name, description: description, schema: .makeObject { for member in members { member } },
+            annotations: MCPToolAnnotations(readOnly: true, openWorld: false))
     }
 
     private static func property(_ type: String, _ description: String) -> JSONValue {

@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- Swift 6.4+ on macOS 15+ or Linux
+- Swift 6.4+ on macOS 15.6+ or Linux
 
 ## Workflow
 

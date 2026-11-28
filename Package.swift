@@ -13,7 +13,7 @@ let strictSwiftSettings: [SwiftSetting] = [
 
 let package = Package(
     name: "swift-search",
-    platforms: [.macOS(.v15)],
+    platforms: [.macOS("15.6")],
     products: [
         .library(name: "SwiftSearch", targets: ["SwiftSearch"]),
         .library(name: "SwiftSearchLSP", targets: ["SwiftSearchLSP"]),
@@ -27,6 +27,9 @@ let package = Package(
             url: "https://github.com/g-cqd/analyzerkit.git", revision: "59ac36d3c267e997a24f47e62654e069bb1a7395"),
         .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "9f8d1a3eafed0ad23919b9c68d33606632ce0659"),
         .package(url: "https://github.com/g-cqd/AemiJSON.git", revision: "fb4478051725c95614e76b15ac11e9a5c6a502a3"),
+        .package(
+            url: "https://github.com/g-cqd/AemiMCP.git", revision: "807efc6822ac7bf332c98799e442f804ece911df",
+            traits: []),
         .package(url: "https://github.com/g-cqd/AemiRegex.git", revision: "1b58215ac7266f8c847065f0cb63ab1cc75b3bc9"),
         .package(url: "https://github.com/swiftlang/swift-subprocess.git", from: "1.0.2", traits: []),
         .package(url: "https://github.com/apple/swift-system.git", from: "1.5.0"),
@@ -67,6 +70,7 @@ let package = Package(
                 "SwiftSearch", "SwiftSearchLSP",
                 .product(name: "AemiJSON", package: "AemiJSON"),
                 .product(name: "AemiJSONRPC", package: "AemiJSON"),
+                .product(name: "AemiMCP", package: "AemiMCP"),
                 .product(name: "ProjectModel", package: "analyzerkit"),
                 .product(name: "ReportSupport", package: "analyzerkit"),
                 .product(name: "AemiRuntime", package: "aemi"),
