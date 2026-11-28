@@ -24,13 +24,13 @@ let package = Package(
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "604.0.0"),
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.8.2"),
         .package(
-            url: "https://github.com/g-cqd/analyzerkit.git", revision: "59ac36d3c267e997a24f47e62654e069bb1a7395"),
-        .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "9f8d1a3eafed0ad23919b9c68d33606632ce0659"),
-        .package(url: "https://github.com/g-cqd/AemiJSON.git", revision: "fb4478051725c95614e76b15ac11e9a5c6a502a3"),
+            url: "https://github.com/g-cqd/analyzerkit.git", revision: "24189b9702218589e19f5435dec28da884d489c0"),
+        .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "8633e6352822d15fc11e46b69da6a76adee72f31"),
+        .package(url: "https://github.com/g-cqd/AemiJSON.git", revision: "b6aaf0127cc480b33090dc4564324b7abfdcb408"),
         .package(
             url: "https://github.com/g-cqd/AemiMCP.git", revision: "992b1a62ec80a85f814bb6f9f7d378ad820d0bcd",
             traits: []),
-        .package(url: "https://github.com/g-cqd/AemiRegex.git", revision: "1b58215ac7266f8c847065f0cb63ab1cc75b3bc9"),
+        .package(url: "https://github.com/g-cqd/AemiRegex.git", revision: "cdde55a04a7fa09afdcd98f9be922402b0583b69"),
         .package(url: "https://github.com/swiftlang/swift-subprocess.git", from: "1.0.2", traits: []),
         .package(url: "https://github.com/apple/swift-system.git", from: "1.5.0"),
         .package(
