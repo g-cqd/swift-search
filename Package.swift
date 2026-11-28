@@ -28,7 +28,7 @@ let package = Package(
         .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "9f8d1a3eafed0ad23919b9c68d33606632ce0659"),
         .package(url: "https://github.com/g-cqd/AemiJSON.git", revision: "fb4478051725c95614e76b15ac11e9a5c6a502a3"),
         .package(
-            url: "https://github.com/g-cqd/AemiMCP.git", revision: "807efc6822ac7bf332c98799e442f804ece911df",
+            url: "https://github.com/g-cqd/AemiMCP.git", revision: "d0e5337083f4060cecdd19dd1b1ecd5a078c6d73",
             traits: []),
         .package(url: "https://github.com/g-cqd/AemiRegex.git", revision: "1b58215ac7266f8c847065f0cb63ab1cc75b3bc9"),
         .package(url: "https://github.com/swiftlang/swift-subprocess.git", from: "1.0.2", traits: []),

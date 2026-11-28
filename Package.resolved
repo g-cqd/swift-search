@@ -1,5 +1,5 @@
 {
-  "originHash" : "b01468541d9e18b678001ad8696e1f625275f6534cca7bae6002db0c18532937",
+  "originHash" : "73c910c9c60153fc2044930322ee5d0d14f93cf127bdc3877fba4bca7384119a",
   "pins" : [
     {
       "identity" : "aemi",
@@ -22,7 +22,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/g-cqd/AemiMCP.git",
       "state" : {
-        "revision" : "807efc6822ac7bf332c98799e442f804ece911df"
+        "revision" : "d0e5337083f4060cecdd19dd1b1ecd5a078c6d73"
       }
     },
     {
